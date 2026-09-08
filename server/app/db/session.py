@@ -1,29 +1,14 @@
-import os
-
-from dotenv import load_dotenv
+﻿from collections.abc import Generator
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
-load_dotenv()
-
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-if DATABASE_URL and DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace(
-        "postgresql://",
-        "postgresql+psycopg://",
-        1
-    )
-
-engine = create_engine(DATABASE_URL)
-
-SessionLocal = sessionmaker(
-    autocommit=False,
-    autoflush=False,
-    bind=engine
+from sqlalchemy.orm import Session, sessionmaker
+from app.core.config import settings
+engine = create_engine(
+    settings.sqlalchemy_url,
+    pool_pre_ping=True,
+    pool_recycle=300,
 )
-
-def get_db():
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+def get_db() -> Generator[Session, None, None]:
     db = SessionLocal()
     try:
         yield db
