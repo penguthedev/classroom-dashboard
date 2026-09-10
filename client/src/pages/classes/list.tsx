@@ -98,7 +98,7 @@ export function ClassesListPage() {
                     {klass.subject.name}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {klass.teacher.name}
+                    {klass.lecturer.full_name}
                   </TableCell>
                   <TableCell>{klass.capacity}</TableCell>
                   <TableCell>

@@ -2,13 +2,10 @@ import { Link, useParams } from "react-router-dom";
 import { useOne } from "@refinedev/core";
 import { ArrowLeft, Users } from "lucide-react";
 
-import { AdvancedImage } from "@cloudinary/react";
-
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { RESOURCES } from "@/constants";
-import { getBannerImage } from "@/lib/cloudinary";
 import type { Class } from "@/types";
 
 export function ClassShowPage() {
@@ -40,12 +37,7 @@ export function ClassShowPage() {
       </Link>
 
       <Card className="overflow-hidden">
-        {klass.banner_cld_pub_id ? (
-          <AdvancedImage
-            cldImg={getBannerImage(klass.banner_cld_pub_id)}
-            className="h-56 w-full object-cover"
-          />
-        ) : klass.banner_url ? (
+        {klass.banner_url ? (
           <img
             src={klass.banner_url}
             alt={klass.name}
@@ -78,7 +70,7 @@ export function ClassShowPage() {
               <dt className="text-xs uppercase text-muted-foreground">
                 Department
               </dt>
-              <dd className="font-medium">{klass.department.name}</dd>
+              <dd className="font-medium">{klass.subject.department.name}</dd>
             </div>
             <div>
               <dt className="text-xs uppercase text-muted-foreground">
@@ -92,9 +84,9 @@ export function ClassShowPage() {
               <dt className="text-xs uppercase text-muted-foreground">
                 Teacher
               </dt>
-              <dd className="font-medium">{klass.teacher.name}</dd>
+              <dd className="font-medium">{klass.lecturer.full_name}</dd>
               <dd className="text-sm text-muted-foreground">
-                {klass.teacher.email}
+                {klass.lecturer.email}
               </dd>
             </div>
             <div>

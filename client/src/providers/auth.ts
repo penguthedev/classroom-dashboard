@@ -1,56 +1,90 @@
 import type { AuthProvider } from "@refinedev/core";
+import type { AxiosError } from "axios";
 
 import { TOKEN_KEY } from "@/constants";
 import { http } from "@/lib/http";
-import type { AuthResponsePayload, Role, SingleResponse, User } from "@/types";
+import type { LockoutDetail, Role, TokenResponsePayload, User } from "@/types";
+
+interface LoginVariables {
+  identifier: string;
+  password: string;
+}
 
 interface RegisterVariables {
-  name: string;
-  email: string;
-  password: string;
   role: Role;
+  formData: FormData;
+}
+
+const REGISTER_ENDPOINTS: Record<Role, string> = {
+  student: "/auth/register/student",
+  lecturer: "/auth/register/lecturer",
+  tutor: "/auth/register/tutor",
+  admin: "/auth/register/admin",
+  technical_services: "/auth/register/technical-services",
+};
+
+function extractDetailMessage(error: unknown): string {
+  const axiosErr = error as AxiosError<{ detail?: unknown }>;
+  const detail = axiosErr.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (detail && typeof detail === "object" && "message" in (detail as any)) {
+    return String((detail as any).message);
+  }
+  if (Array.isArray(detail) && detail.length > 0 && typeof detail[0]?.msg === "string") {
+    return detail[0].msg as string;
+  }
+  return "Something went wrong. Please try again.";
 }
 
 /**
- * Hand-rolled JWT auth provider (per section 7 of the spec — no Better
- * Auth, since it's TS-only on the backend). The token is stored in
- * localStorage and attached to every request by `lib/http.ts`.
+ * Hand-rolled JWT auth provider talking to the FastAPI backend directly
+ * (see server/app/api/auth.py). Token lives in localStorage and is attached
+ * to every request by lib/http.ts.
  */
 export const authProvider: AuthProvider = {
-  login: async ({ email, password }) => {
+  login: async ({ identifier, password }: LoginVariables) => {
     try {
-      const { data } = await http.post<SingleResponse<AuthResponsePayload>>(
-        "/auth/login",
-        { email, password },
-      );
-      localStorage.setItem(TOKEN_KEY, data.data.access_token);
+      const { data } = await http.post<TokenResponsePayload>("/auth/login", {
+        identifier,
+        password,
+      });
+      localStorage.setItem(TOKEN_KEY, data.access_token);
       return { success: true, redirectTo: "/" };
-    } catch {
+    } catch (error) {
+      const axiosErr = error as AxiosError<{ detail?: LockoutDetail | string }>;
+      if (axiosErr.response?.status === 423) {
+        const detail = axiosErr.response.data?.detail as LockoutDetail;
+        return {
+          success: false,
+          error: {
+            name: "LockedError",
+            message: detail?.message ?? "Too many failed login attempts.",
+            // Extra field consumed by LoginPage for the countdown; not part
+            // of Refine's typed error shape, so it's read back with a cast.
+            ...( { retryAfterSeconds: detail?.retry_after_seconds } as any),
+          },
+        };
+      }
       return {
         success: false,
-        error: {
-          name: "LoginError",
-          message: "Invalid email or password",
-        },
+        error: { name: "LoginError", message: extractDetailMessage(error) },
       };
     }
   },
 
-  register: async (params: RegisterVariables) => {
+  register: async ({ role, formData }: RegisterVariables) => {
     try {
-      const { data } = await http.post<SingleResponse<AuthResponsePayload>>(
-        "/auth/register",
-        params,
+      const { data } = await http.post<TokenResponsePayload>(
+        REGISTER_ENDPOINTS[role],
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } },
       );
-      localStorage.setItem(TOKEN_KEY, data.data.access_token);
+      localStorage.setItem(TOKEN_KEY, data.access_token);
       return { success: true, redirectTo: "/" };
-    } catch {
+    } catch (error) {
       return {
         success: false,
-        error: {
-          name: "RegisterError",
-          message: "Could not create account. Email may already be in use.",
-        },
+        error: { name: "RegisterError", message: extractDetailMessage(error) },
       };
     }
   },
@@ -65,7 +99,6 @@ export const authProvider: AuthProvider = {
     if (!token) {
       return { authenticated: false, redirectTo: "/login" };
     }
-
     try {
       await http.get("/auth/me");
       return { authenticated: true };
@@ -85,8 +118,8 @@ export const authProvider: AuthProvider = {
 
   getIdentity: async () => {
     try {
-      const { data } = await http.get<SingleResponse<User>>("/auth/me");
-      return data.data;
+      const { data } = await http.get<User>("/auth/me");
+      return data;
     } catch {
       return null;
     }
@@ -94,8 +127,8 @@ export const authProvider: AuthProvider = {
 
   getPermissions: async () => {
     try {
-      const { data } = await http.get<SingleResponse<User>>("/auth/me");
-      return data.data.role;
+      const { data } = await http.get<User>("/auth/me");
+      return data.role;
     } catch {
       return null;
     }
