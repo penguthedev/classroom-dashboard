@@ -13,6 +13,7 @@ import { dataProvider } from "@/providers/data";
 
 import { LoginPage } from "@/pages/auth/login";
 import { RegisterPage } from "@/pages/auth/register";
+import { WelcomePage } from "@/pages/welcome";
 import { DashboardPage } from "@/pages/dashboard/dashboard";
 import { DepartmentsListPage } from "@/pages/departments/list";
 import { SubjectsListPage } from "@/pages/subjects/list";
@@ -48,7 +49,7 @@ function App() {
         {/* Everything under here requires a logged-in user */}
         <Route
           element={
-            <Authenticated key="protected" redirectOnFail="/login">
+            <Authenticated key="protected" redirectOnFail="/welcome">
               <AppLayout>
                 <Outlet />
               </AppLayout>
@@ -71,13 +72,14 @@ function App() {
             </Authenticated>
           }
         >
+          <Route path="/welcome" element={<WelcomePage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
         </Route>
 
         <Route
           path="*"
-          element={<CatchAllNavigate to="/login" />}
+          element={<CatchAllNavigate to="/welcome" />}
         />
       </Routes>
 

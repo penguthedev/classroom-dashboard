@@ -11,7 +11,7 @@ import {
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { User } from "@/types";
+import { ROLE_LABELS, type User } from "@/types";
 
 const NAV_ITEMS = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -57,9 +57,9 @@ export function AppLayout({ children }: PropsWithChildren) {
             {identity ? (
               <>
                 <div className="truncate font-medium text-sidebar-foreground">
-                  {identity.name}
+                  {identity.full_name}
                 </div>
-                <div className="truncate capitalize">{identity.role}</div>
+                <div className="truncate">{ROLE_LABELS[identity.role]}</div>
               </>
             ) : (
               "Loading..."
