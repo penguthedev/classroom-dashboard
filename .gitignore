@@ -1,0 +1,26 @@
+# Python
+server/.venv/
+server/**/__pycache__/
+*.py[cod]
+
+# Environment variables
+server/.env
+server/.env.*
+!server/.env.example
+
+# Node
+client/node_modules/
+client/dist/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
