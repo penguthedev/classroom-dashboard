@@ -27,6 +27,7 @@ class User(Base, TimestampMixin):
     image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     image_object_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     failed_login_attempts: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="0"
     )

@@ -35,6 +35,7 @@ USER_COLUMN_MAP = {
     "emergency_contact_name": "emergency_contact_name",
     "emergency_contact_phone": "emergency_contact_phone",
     "is_active": "is_active",
+    "is_approved": "is_approved",
 }
 
 
@@ -57,6 +58,7 @@ def list_users(
     department: str | None = None,
     programme: str | None = None,
     is_active: bool | None = None,
+    is_approved: bool | None = None,
 ):
     stmt = select(User)
 
@@ -96,6 +98,8 @@ def list_users(
         )
     if is_active is not None:
         stmt = stmt.where(User.is_active.is_(is_active))
+    if is_approved is not None:
+        stmt = stmt.where(User.is_approved.is_(is_approved))
 
     rows, pagination = paginate(
         db, stmt.order_by(User.id), page, limit, user_loader_options()

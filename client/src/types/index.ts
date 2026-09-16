@@ -89,6 +89,7 @@ export interface User {
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
   is_active: boolean;
+  is_approved: boolean;
   created_at: string;
   profile: AnyProfile | null;
 }
@@ -115,13 +116,17 @@ export interface Class {
 export interface Schedule {
   id: number;
   class_id: number;
-  session_date: string;
-  start_time: string;
-  end_time: string;
-  classroom: string;
-  building: string;
-  status: "scheduled" | "cancelled" | "completed";
-  class_?: Pick<Class, "id" | "name" | "subject" | "lecturer" | "tutor">;
+  room_id: number;
+  lecturer_id: number;
+  tutor_id: number | null;
+  starts_at: string;
+  ends_at: string;
+  status: "scheduled" | "rescheduled" | "cancelled" | "completed";
+  notes: string | null;
+  class: Pick<Class, "id" | "name" | "subject">;
+  room: { id: number; code: string; name: string | null; building: { id: number; name: string } };
+  lecturer: Pick<User, "id" | "full_name" | "email">;
+  tutor: Pick<User, "id" | "full_name" | "email"> | null;
 }
 
 export interface Enrollment {
@@ -150,9 +155,10 @@ export interface SingleResponse<T> {
 }
 
 export interface TokenResponsePayload {
-  access_token: string;
+  access_token: string | null;
   token_type: string;
   user: User;
+  pending_approval: boolean;
 }
 
 /** Shape of the 423 lockout body returned by POST /api/auth/login. */

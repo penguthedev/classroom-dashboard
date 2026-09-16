@@ -41,6 +41,7 @@ class UserOut(BaseModel):
     emergency_contact_phone: str | None = None
     date_of_birth: date | None = None
     is_active: bool
+    is_approved: bool
     created_at: datetime
     profile: dict[str, Any] | None = None
 
@@ -66,6 +67,7 @@ class UserUpdate(BaseModel):
     emergency_contact_phone: str | None = Field(default=None, max_length=50)
     profile_picture_url: str | None = Field(default=None, max_length=512)
     is_active: bool | None = None
+    is_approved: bool | None = None
     role: Role | None = None
     department_id: int | None = None
     programme_id: int | None = None

@@ -64,6 +64,11 @@ def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account has been deactivated",
         )
+    if not user.is_approved:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account is awaiting admin approval.",
+        )
     return user
 
 

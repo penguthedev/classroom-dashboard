@@ -58,30 +58,49 @@ DOCUMENT_KINDS: dict[str, str] = {
 }
 
 
-def initials_from_name(name: str) -> str:
+def initials_from_name(name: str, fallback: str = "STU") -> str:
     parts = [p for p in re.split(r"[^A-Za-z]+", name) if p]
     if not parts:
-        return "STU"
+        return fallback
     letters = "".join(p[0] for p in parts).upper()
     return letters[:4] if len(letters) > 1 else (letters + "X")[:2]
 
 
-def next_student_number(db: Session, full_name: str) -> str:
-    prefix = initials_from_name(full_name)
-    pattern = f"{prefix}%"
-    existing = db.scalars(
-        select(StudentProfile.student_number).where(
-            StudentProfile.student_number.like(pattern)
-        )
-    ).all()
+def _next_sequential_number(existing: list[str], prefix: str) -> str:
+    """Given already-taken IDs sharing `prefix`, return the next one.
 
+    Shared by students and staff so every role gets an ID generated the
+    same way: <INITIALS><5-digit sequence>, e.g. "BMM00001".
+    """
     highest = 0
     for number in existing:
         tail = number[len(prefix):]
         if tail.isdigit():
             highest = max(highest, int(tail))
-
     return f"{prefix}{highest + 1:05d}"
+
+
+def next_student_number(db: Session, full_name: str) -> str:
+    prefix = initials_from_name(full_name, fallback="STU")
+    existing = db.scalars(
+        select(StudentProfile.student_number).where(
+            StudentProfile.student_number.like(f"{prefix}%")
+        )
+    ).all()
+    return _next_sequential_number(existing, prefix)
+
+
+def next_staff_number(db: Session, full_name: str) -> str:
+    # staff_number is shared (and unique) across lecturers, tutors, admins
+    # and technical services, so the sequence is scoped by name-initials
+    # prefix across the whole StaffProfile table, same idea as students.
+    prefix = initials_from_name(full_name, fallback="STF")
+    existing = db.scalars(
+        select(StaffProfile.staff_number).where(
+            StaffProfile.staff_number.like(f"{prefix}%")
+        )
+    ).all()
+    return _next_sequential_number(existing, prefix)
 
 
 def ensure_unique_account(db: Session, email: str, username: str) -> None:
@@ -133,6 +152,17 @@ def ensure_unique_id_code(db: Session, id_code: str) -> None:
             status_code=status.HTTP_409_CONFLICT,
             detail="This staff ID is already registered",
         )
+
+
+def resolve_staff_number(db: Session, payload: Any) -> str:
+    """Same behaviour as resolve_student_number: if the person left the ID
+    field blank (now the default for every role, not just students), one is
+    generated automatically; if they supplied one, it's validated instead."""
+    supplied = (getattr(payload, "id_code", None) or "").strip()
+    if not supplied:
+        return next_staff_number(db, payload.full_name)
+    ensure_unique_id_code(db, supplied)
+    return supplied
 
 
 def get_department_or_404(db: Session, department_id: int) -> Department:
@@ -224,6 +254,11 @@ def attach_documents(
         )
 
 
+# Roles that go live immediately. Everyone else needs an admin to flip
+# is_approved before they can log in (see login() below).
+SELF_APPROVING_ROLES = {"admin"}
+
+
 def build_user(payload: Any, role: str, picture: UploadFile | None) -> User:
     stored = store_upload(picture, "image")
     return User(
@@ -240,6 +275,7 @@ def build_user(payload: Any, role: str, picture: UploadFile | None) -> User:
         image_url=stored["file_url"] if stored else None,
         image_object_key=stored["object_key"] if stored else None,
         is_active=True,
+        is_approved=role in SELF_APPROVING_ROLES,
     )
 
 
@@ -254,6 +290,12 @@ def finalize(db: Session, user: User) -> AuthPayload:
         ) from exc
 
     fresh = load_user(db, user.id)
+
+    if not fresh.is_approved:
+        # Account exists but can't sign in yet — no token until an admin
+        # approves it.
+        return AuthPayload(user=serialize_user(fresh), pending_approval=True)
+
     token = create_access_token(user.id, user.role)
     return AuthPayload(user=serialize_user(fresh), access_token=token)
 
@@ -303,7 +345,7 @@ def register_lecturer(
     db: Annotated[Session, Depends(get_db)],
 ):
     ensure_unique_account(db, str(payload.email).lower(), payload.username)
-    ensure_unique_id_code(db, payload.id_code)
+    staff_number = resolve_staff_number(db, payload)
     get_department_or_404(db, payload.department_id)
     get_faculty_or_404(db, payload.faculty_id)
 
@@ -315,7 +357,7 @@ def register_lecturer(
         StaffProfile(
             user_id=user.id,
             department_id=payload.department_id,
-            staff_number=payload.id_code,
+            staff_number=staff_number,
             position=payload.academic_position,
             specialization=payload.specialization,
             qualification=payload.qualification,
@@ -335,7 +377,7 @@ def register_tutor(
     db: Annotated[Session, Depends(get_db)],
 ):
     ensure_unique_account(db, str(payload.email).lower(), payload.username)
-    ensure_unique_id_code(db, payload.id_code)
+    staff_number = resolve_staff_number(db, payload)
     get_department_or_404(db, payload.department_id)
     get_faculty_or_404(db, payload.faculty_id)
 
@@ -347,7 +389,7 @@ def register_tutor(
         StaffProfile(
             user_id=user.id,
             department_id=payload.department_id,
-            staff_number=payload.id_code,
+            staff_number=staff_number,
             position="tutor",
             specialization=payload.subject_specialization,
             qualification=payload.qualification,
@@ -376,7 +418,7 @@ def register_admin(
         )
 
     ensure_unique_account(db, str(payload.email).lower(), payload.username)
-    ensure_unique_id_code(db, payload.id_code)
+    staff_number = resolve_staff_number(db, payload)
     get_department_or_404(db, payload.department_id)
 
     user = build_user(payload, "admin", payload.profile_picture)
@@ -387,7 +429,7 @@ def register_admin(
         StaffProfile(
             user_id=user.id,
             department_id=payload.department_id,
-            staff_number=payload.id_code,
+            staff_number=staff_number,
             position=payload.position,
         )
     )
@@ -407,7 +449,7 @@ def register_technical_services(
     db: Annotated[Session, Depends(get_db)],
 ):
     ensure_unique_account(db, str(payload.email).lower(), payload.username)
-    ensure_unique_id_code(db, payload.id_code)
+    staff_number = resolve_staff_number(db, payload)
     get_department_or_404(db, payload.department_id)
 
     user = build_user(payload, "technical_services", payload.profile_picture)
@@ -418,7 +460,7 @@ def register_technical_services(
         StaffProfile(
             user_id=user.id,
             department_id=payload.department_id,
-            staff_number=payload.id_code,
+            staff_number=staff_number,
             position=payload.technical_position,
             specialization=payload.technical_specialization,
             qualification=payload.qualification,
@@ -475,6 +517,15 @@ def login(payload: LoginRequest, db: Annotated[Session, Depends(get_db)]):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This account has been deactivated",
+        )
+
+    if not user.is_approved:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Your account is awaiting admin approval. "
+                "You'll be able to sign in once it's approved."
+            ),
         )
 
     user.failed_login_attempts = 0

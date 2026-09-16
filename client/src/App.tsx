@@ -13,8 +13,11 @@ import { dataProvider } from "@/providers/data";
 
 import { LoginPage } from "@/pages/auth/login";
 import { RegisterPage } from "@/pages/auth/register";
+import { RegistrationPendingPage } from "@/pages/auth/registration-pending";
 import { WelcomePage } from "@/pages/welcome";
 import { DashboardPage } from "@/pages/dashboard/dashboard";
+import { StudentDashboard } from "@/pages/dashboard/student-dashboard";
+import { LecturerDashboard } from "@/pages/dashboard/lecturer-dashboard";
 import { DepartmentsListPage } from "@/pages/departments/list";
 import { SubjectsListPage } from "@/pages/subjects/list";
 import { ClassesListPage } from "@/pages/classes/list";
@@ -57,6 +60,8 @@ function App() {
           }
         >
           <Route index element={<DashboardPage />} />
+          <Route path="/student" element={<StudentDashboard />} />
+          <Route path="/lecturer" element={<LecturerDashboard />} />
           <Route path="/departments" element={<DepartmentsListPage />} />
           <Route path="/subjects" element={<SubjectsListPage />} />
           <Route path="/classes" element={<ClassesListPage />} />
@@ -75,6 +80,7 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/welcome" element={<WelcomePage />} />
+          <Route path="/registration-pending" element={<RegistrationPendingPage />} />
         </Route>
 
         <Route

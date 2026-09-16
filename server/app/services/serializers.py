@@ -106,6 +106,7 @@ def serialize_user(user: User) -> UserOut:
         emergency_contact_phone=user.emergency_contact_phone,
         date_of_birth=user.date_of_birth,
         is_active=user.is_active,
+        is_approved=user.is_approved,
         created_at=user.created_at,
         profile=build_profile(user),
     )

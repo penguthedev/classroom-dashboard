@@ -58,7 +58,7 @@ class StudentRegisterRequest(RegisterCommon):
 
 
 class LecturerRegisterRequest(RegisterCommon):
-    id_code: str = Field(min_length=2, max_length=50)
+    id_code: str | None = Field(default=None, min_length=2, max_length=50)
     date_of_birth: date
     faculty: str | None = Field(default=None, max_length=255)
     faculty_id: int | None = Field(default=None, gt=0)
@@ -70,7 +70,7 @@ class LecturerRegisterRequest(RegisterCommon):
 
 
 class TutorRegisterRequest(RegisterCommon):
-    id_code: str = Field(min_length=2, max_length=50)
+    id_code: str | None = Field(default=None, min_length=2, max_length=50)
     date_of_birth: date
     faculty: str | None = Field(default=None, max_length=255)
     faculty_id: int | None = Field(default=None, gt=0)
@@ -81,14 +81,14 @@ class TutorRegisterRequest(RegisterCommon):
 
 
 class AdminRegisterRequest(RegisterCommon):
-    id_code: str = Field(min_length=2, max_length=50)
+    id_code: str | None = Field(default=None, min_length=2, max_length=50)
     department_id: int = Field(gt=0)
     position: str = Field(min_length=1, max_length=100)
     staff_verification_document: UploadFile | None = None
 
 
 class TechnicalRegisterRequest(RegisterCommon):
-    id_code: str = Field(min_length=2, max_length=50)
+    id_code: str | None = Field(default=None, min_length=2, max_length=50)
     department_id: int = Field(gt=0)
     technical_position: str = Field(min_length=1, max_length=100)
     technical_specialization: TechnicalSpecialization
@@ -146,8 +146,11 @@ class ChangePasswordRequest(BaseModel):
 
 class AuthPayload(BaseModel):
     user: UserOut
-    access_token: str
+    access_token: str | None = None
     token_type: str = "bearer"
+    # True when the account was just created but still needs an admin to
+    # approve it before it can sign in (see app/api/auth.py::finalize).
+    pending_approval: bool = False
 
 
 class LockoutDetail(BaseModel):

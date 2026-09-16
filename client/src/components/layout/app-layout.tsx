@@ -11,11 +11,11 @@ import {
 
 import { AssistantWidget } from "@/components/assistant";
 import { Button } from "@/components/ui/button";
+import { roleHome } from "@/providers/auth";
 import { cn } from "@/lib/utils";
 import { ROLE_LABELS, type User } from "@/types";
 
-const NAV_ITEMS = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard },
+const BASE_NAV_ITEMS = [
   { to: "/departments", label: "Departments", icon: Building2 },
   { to: "/subjects", label: "Subjects", icon: GraduationCap },
   { to: "/classes", label: "Classes", icon: School },
@@ -24,6 +24,12 @@ const NAV_ITEMS = [
 export function AppLayout({ children }: PropsWithChildren) {
   const { data: identity } = useGetIdentity<User>();
   const { mutate: logout } = useLogout();
+
+  const dashboardTo = identity ? roleHome(identity.role) : "/";
+  const navItems = [
+    { to: dashboardTo, label: "Dashboard", icon: LayoutDashboard },
+    ...BASE_NAV_ITEMS,
+  ];
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -34,7 +40,7 @@ export function AppLayout({ children }: PropsWithChildren) {
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+          {navItems.map(({ to, label, icon: Icon }) => (
             <NavLink
               key={to}
               to={to}
