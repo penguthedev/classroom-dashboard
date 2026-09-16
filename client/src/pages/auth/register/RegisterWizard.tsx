@@ -74,7 +74,9 @@ export function RegisterWizard({ config, onBack }: RegisterWizardProps) {
   });
 
   const stepFieldNames: string[][] = [
-    config.role === "student" ? PERSONAL_FIELDS.filter((f) => f !== "id_code") : [...PERSONAL_FIELDS],
+    // Every role's ID is generated automatically after submission, so
+    // id_code is never a field the person fills in or that gets validated.
+    PERSONAL_FIELDS.filter((f) => f !== "id_code"),
     academicFieldNames,
     [], // documents step has no RHF-validated fields (handled separately)
     [...ACCOUNT_FIELDS],
@@ -181,14 +183,10 @@ export function RegisterWizard({ config, onBack }: RegisterWizardProps) {
               register,
               errors,
             )}
-            {config.role === "student" ? (
-              <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-                Your {config.idLabel} will be generated automatically from your name after you submit
-                (e.g. "Bhone Myint Maw" &rarr; "BMM00001").
-              </p>
-            ) : (
-              renderField({ name: "id_code", label: config.idLabel, type: "text" }, register, errors)
-            )}
+            <p className="rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              Your {config.idLabel} will be generated automatically from your name after you submit
+              (e.g. "Bhone Myint Maw" &rarr; "BMM00001").
+            </p>
             {renderField({ name: "email", label: "Email", type: "email" }, register, errors)}
             {renderField({ name: "phone_number", label: "Phone number", type: "tel" }, register, errors)}
             {renderField({ name: "address", label: "Address", type: "textarea" }, register, errors)}
@@ -490,10 +488,7 @@ function ReviewStep({
 }) {
   const rows: [string, string][] = [
     ["Full name", values.full_name ?? "—"],
-    [
-      config.idLabel,
-      config.role === "student" ? "Generated automatically after submission" : (values.id_code ?? "—"),
-    ],
+    [config.idLabel, "Generated automatically after submission"],
     ["Email", values.email ?? "—"],
     ["Phone number", values.phone_number ?? "—"],
     ["Username", values.username ?? "—"],

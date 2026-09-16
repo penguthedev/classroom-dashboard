@@ -17,9 +17,9 @@ export function useDepartments() {
   useEffect(() => {
     let cancelled = false;
     http
-      .get<Department[]>("/departments")
+      .get<{ data: Department[] }>("/departments")
       .then(({ data }) => {
-        if (!cancelled) setDepartments(data);
+        if (!cancelled) setDepartments(data.data);
       })
       .catch(() => {
         if (!cancelled) setError("Could not load departments. Please refresh and try again.");

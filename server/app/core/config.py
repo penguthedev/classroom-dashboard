@@ -24,6 +24,27 @@ class Settings(BaseSettings):
     S3_SECRET_KEY: str = ""
     S3_BUCKET: str = ""
 
+    LOGIN_MAX_ATTEMPTS: int = 5
+    LOGIN_LOCKOUT_SECONDS: int = 50
+
+    UPLOAD_MAX_BYTES: int = 10 * 1024 * 1024
+    UPLOAD_URL_EXPIRY_SECONDS: int = 900
+
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""
+    SMTP_USE_SSL: bool = False
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 30
+
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.5-flash"
+    ASSISTANT_NAME: str = "Luminara"
+    ASSISTANT_INSTITUTION: str = "Classroom Dashboard"
+    ASSISTANT_MAX_TOOL_TURNS: int = 6
+    ASSISTANT_HISTORY_LIMIT: int = 12
+
     @property
     def sqlalchemy_url(self) -> str:
         url = self.DATABASE_URL
@@ -36,6 +57,23 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [o.strip().rstrip("/") for o in self.FRONTEND_URL.split(",") if o.strip()]
+
+    @property
+    def storage_enabled(self) -> bool:
+        return bool(self.S3_ENDPOINT and self.S3_BUCKET and self.S3_ACCESS_KEY)
+
+    @property
+    def assistant_enabled(self) -> bool:
+        return bool(self.GEMINI_API_KEY)
+
+    @property
+    def mail_enabled(self) -> bool:
+        return bool(self.SMTP_HOST and (self.SMTP_FROM or self.SMTP_USER))
+
+    @property
+    def frontend_origin(self) -> str:
+        origins = self.cors_origins
+        return origins[0] if origins else "http://localhost:5173"
 
 
 @lru_cache

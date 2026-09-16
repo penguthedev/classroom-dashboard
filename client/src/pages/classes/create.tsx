@@ -18,7 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { RESOURCES } from "@/constants";
-import { uploadToCloudinary } from "@/lib/cloudinary";
+import { uploadBanner } from "@/lib/upload";
 import {
   type CreateClassFormInput,
   type CreateClassFormValues,
@@ -31,6 +31,8 @@ export function ClassCreatePage() {
   const [uploading, setUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const [bannerError, setBannerError] = useState<string | null>(null);
+  const [bannerName, setBannerName] = useState<string | null>(null);
 
   const { result: subjectsResult } = useList<Subject>({
     resource: RESOURCES.subjects,
@@ -59,14 +61,24 @@ export function ClassCreatePage() {
     if (!file) return;
 
     setUploading(true);
+    setBannerError(null);
     try {
-      const { secure_url } = await uploadToCloudinary(file);
-      setValue("banner_url", secure_url, { shouldValidate: true });
-      setBannerPreview(secure_url);
+      const { file_url, object_key } = await uploadBanner(file);
+      setValue("banner_url", file_url, { shouldValidate: true });
+      setValue("banner_object_key", object_key, { shouldValidate: true });
+      setBannerPreview(file_url);
+      setBannerName(file.name);
     } catch (error) {
-      console.error(error);
+      setValue("banner_url", "");
+      setValue("banner_object_key", "");
+      setBannerPreview(null);
+      setBannerName(null);
+      setBannerError(
+        error instanceof Error ? error.message : "The upload failed.",
+      );
     } finally {
       setUploading(false);
+      event.target.value = "";
     }
   }
 
@@ -185,13 +197,22 @@ export function ClassCreatePage() {
                 <input
                   id="banner"
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp"
                   className="hidden"
                   onChange={handleBannerChange}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Uploaded directly to Cloudinary. {bannerPreview ? "Uploaded ✓" : "Optional."}
-                </p>
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">
+                    {uploading
+                      ? "Uploading..."
+                      : bannerName
+                        ? `${bannerName} uploaded`
+                        : "JPG, PNG or WebP up to 10 MB. Optional."}
+                  </p>
+                  {bannerError && (
+                    <p className="text-xs text-destructive">{bannerError}</p>
+                  )}
+                </div>
               </div>
             </div>
 

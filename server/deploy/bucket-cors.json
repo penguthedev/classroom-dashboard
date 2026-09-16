@@ -1,0 +1,12 @@
+[
+  {
+    "AllowedOrigin": [
+      "http://localhost:5173",
+      "https://REPLACE-WITH-YOUR-SITE.netlify.app"
+    ],
+    "AllowedMethod": ["GET", "PUT", "POST"],
+    "AllowedHeader": ["*"],
+    "ExposeHeader": ["ETag"],
+    "MaxAgeSeconds": 3000
+  }
+]

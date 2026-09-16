@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Any
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -26,43 +27,51 @@ class StaffProfileOut(ORMModel):
     department: DepartmentRef | None = None
 
 
-class UserOut(ORMModel):
+class UserOut(BaseModel):
     id: int
-    email: EmailStr
-    username: str
-    name: str
+    id_code: str | None = None
     role: Role
-    phone: str | None = None
-    date_of_birth: date | None = None
+    full_name: str
+    username: str
+    email: EmailStr
+    phone_number: str | None = None
+    profile_picture_url: str | None = None
     address: str | None = None
     emergency_contact_name: str | None = None
     emergency_contact_phone: str | None = None
-    image_url: str | None = None
-    image_object_key: str | None = None
+    date_of_birth: date | None = None
     is_active: bool
-    student_profile: StudentProfileOut | None = None
-    staff_profile: StaffProfileOut | None = None
+    is_approved: bool
     created_at: datetime
-    updated_at: datetime
+    profile: dict[str, Any] | None = None
 
 
-class UserSummaryOut(ORMModel):
+class UserSummaryOut(BaseModel):
     id: int
-    name: str
-    email: EmailStr
+    id_code: str | None = None
     role: Role
-    image_url: str | None = None
-    student_profile: StudentProfileOut | None = None
+    full_name: str
+    email: EmailStr
+    profile_picture_url: str | None = None
+    department: DepartmentRef | None = None
+    programme: ProgrammeRef | None = None
+    year_of_study: int | None = None
 
 
 class UserUpdate(BaseModel):
-    name: str | None = Field(default=None, min_length=1, max_length=255)
-    phone: str | None = Field(default=None, max_length=50)
+    full_name: str | None = Field(default=None, min_length=1, max_length=255)
+    phone_number: str | None = Field(default=None, max_length=50)
     date_of_birth: date | None = None
     address: str | None = None
     emergency_contact_name: str | None = Field(default=None, max_length=255)
     emergency_contact_phone: str | None = Field(default=None, max_length=50)
-    image_url: str | None = Field(default=None, max_length=512)
-    image_object_key: str | None = Field(default=None, max_length=512)
+    profile_picture_url: str | None = Field(default=None, max_length=512)
     is_active: bool | None = None
+    is_approved: bool | None = None
     role: Role | None = None
+    department_id: int | None = None
+    programme_id: int | None = None
+    year_of_study: int | None = Field(default=None, ge=1, le=10)
+    position: str | None = Field(default=None, max_length=100)
+    specialization: str | None = Field(default=None, max_length=255)
+    qualification: str | None = Field(default=None, max_length=255)

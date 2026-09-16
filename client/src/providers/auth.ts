@@ -23,6 +23,23 @@ const REGISTER_ENDPOINTS: Record<Role, string> = {
   technical_services: "/auth/register/technical-services",
 };
 
+/**
+ * Where each role lands after signing in. Students and lecturers get their
+ * own dashboards; tutors share the lecturer one since they teach classes
+ * the same way. Admin/technical staff land on the general admin dashboard.
+ */
+const ROLE_HOME: Record<Role, string> = {
+  student: "/student",
+  lecturer: "/lecturer",
+  tutor: "/lecturer",
+  admin: "/",
+  technical_services: "/",
+};
+
+export function roleHome(role: Role): string {
+  return ROLE_HOME[role] ?? "/";
+}
+
 function extractDetailMessage(error: unknown): string {
   const axiosErr = error as AxiosError<{ detail?: unknown }>;
   const detail = axiosErr.response?.data?.detail;
@@ -48,11 +65,19 @@ export const authProvider: AuthProvider = {
         identifier,
         password,
       });
+      if (!data.access_token) {
+        // Shouldn't happen — the backend rejects login for unapproved
+        // accounts with a 403 before this ever resolves — but guard anyway.
+        return {
+          success: false,
+          error: { name: "LoginError", message: "This account is not ready to sign in yet." },
+        };
+      }
       localStorage.setItem(TOKEN_KEY, data.access_token);
-      return { success: true, redirectTo: "/" };
+      return { success: true, redirectTo: roleHome(data.user.role) };
     } catch (error) {
       const axiosErr = error as AxiosError<{ detail?: LockoutDetail | string }>;
-      if (axiosErr.response?.status === 423) {
+      if (axiosErr.response?.status === 429) {
         const detail = axiosErr.response.data?.detail as LockoutDetail;
         return {
           success: false,
@@ -79,8 +104,15 @@ export const authProvider: AuthProvider = {
         formData,
         { headers: { "Content-Type": "multipart/form-data" } },
       );
+
+      if (data.pending_approval || !data.access_token) {
+        // Account was created but needs an admin to approve it before it
+        // can sign in — don't store a token, send them to a holding page.
+        return { success: true, redirectTo: "/registration-pending" };
+      }
+
       localStorage.setItem(TOKEN_KEY, data.access_token);
-      return { success: true, redirectTo: "/" };
+      return { success: true, redirectTo: roleHome(data.user.role) };
     } catch (error) {
       return {
         success: false,

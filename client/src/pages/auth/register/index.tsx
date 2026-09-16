@@ -61,6 +61,11 @@ export function RegisterPage() {
           })}
         </div>
 
+        <p className="mt-4 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
+          A default Admin account is already set up on the system — ask your system administrator
+          for the sign-in details rather than registering a new one here.
+        </p>
+
         <p className="mt-6 text-center text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link to="/login" className="font-medium text-primary underline-offset-4 hover:underline">

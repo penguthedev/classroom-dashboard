@@ -19,7 +19,9 @@ const passwordField = z
   );
 
 const commonRegisterFields = z.object({
-  id_code: z.string().min(2, "Required"),
+  // Every role's ID is generated automatically after submission (same
+  // behaviour as students), so it's never a required, user-filled field.
+  id_code: z.string().min(2, "Required").optional().or(z.literal("")),
   full_name: z.string().min(2, "Required"),
   username: z.string().min(3, "At least 3 characters"),
   email: z.string().email("Enter a valid email"),
@@ -124,6 +126,7 @@ export const createClassSchema = z.object({
   tutor_id: z.coerce.number().int().optional(),
   capacity: z.coerce.number().int().min(1, "Capacity must be at least 1"),
   banner_url: z.string().url().optional().or(z.literal("")),
+  banner_object_key: z.string().max(512).optional().or(z.literal("")),
 });
 export type CreateClassFormInput = z.input<typeof createClassSchema>;
 export type CreateClassFormValues = z.output<typeof createClassSchema>;

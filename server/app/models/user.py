@@ -27,6 +27,7 @@ class User(Base, TimestampMixin):
     image_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     image_object_key: Mapped[str | None] = mapped_column(String(512), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
+    is_approved: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="true")
     failed_login_attempts: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default="0"
     )
@@ -42,6 +43,9 @@ class User(Base, TimestampMixin):
     )
     documents: Mapped[list["Document"]] = relationship(back_populates="user")
     notifications: Mapped[list["Notification"]] = relationship(back_populates="user")
+    password_reset_tokens: Mapped[list["PasswordResetToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
     enrollments: Mapped[list["Enrollment"]] = relationship(back_populates="student")
     classes_lecturing: Mapped[list["Class"]] = relationship(
         back_populates="lecturer", foreign_keys="Class.lecturer_id"

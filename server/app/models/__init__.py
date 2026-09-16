@@ -11,6 +11,7 @@ from app.models.schedule import Schedule
 from app.models.enrollment import Enrollment
 from app.models.notification import Notification
 from app.models.document import Document
+from app.models.password_reset import PasswordResetToken
 
 __all__ = [
     "Faculty",
@@ -27,4 +28,5 @@ __all__ = [
     "Enrollment",
     "Notification",
     "Document",
+    "PasswordResetToken",
 ]
