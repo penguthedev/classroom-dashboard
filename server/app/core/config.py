@@ -18,11 +18,10 @@ class Settings(BaseSettings):
 
     FRONTEND_URL: str = "http://localhost:5173"
 
-    S3_ENDPOINT: str = ""
-    S3_PUBLIC_URL: str = ""
-    S3_ACCESS_KEY: str = ""
-    S3_SECRET_KEY: str = ""
-    S3_BUCKET: str = ""
+    CLOUDINARY_CLOUD_NAME: str = ""
+    CLOUDINARY_API_KEY: str = ""
+    CLOUDINARY_API_SECRET: str = ""
+    CLOUDINARY_FOLDER: str = ""
 
     LOGIN_MAX_ATTEMPTS: int = 5
     LOGIN_LOCKOUT_SECONDS: int = 50
@@ -60,7 +59,11 @@ class Settings(BaseSettings):
 
     @property
     def storage_enabled(self) -> bool:
-        return bool(self.S3_ENDPOINT and self.S3_BUCKET and self.S3_ACCESS_KEY)
+        return bool(
+            self.CLOUDINARY_CLOUD_NAME
+            and self.CLOUDINARY_API_KEY
+            and self.CLOUDINARY_API_SECRET
+        )
 
     @property
     def assistant_enabled(self) -> bool:

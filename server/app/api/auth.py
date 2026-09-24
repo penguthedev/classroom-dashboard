@@ -11,7 +11,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import CurrentUser, load_user
+from app.api.deps import CurrentUser, load_user, require_role
 from app.core.config import settings
 from app.core.mail import MailError, send_password_reset
 from app.core.security import create_access_token, hash_password, verify_password
@@ -254,12 +254,16 @@ def attach_documents(
         )
 
 
-# Roles that go live immediately. Everyone else needs an admin to flip
-# is_approved before they can log in (see login() below).
-SELF_APPROVING_ROLES = {"admin"}
+# Every public self-registration starts out pending: an admin has to approve
+# it (POST /api/users/{id}/approve) before the person can log in. Admin
+# accounts can no longer be self-registered at all — only an existing admin
+# can create one (see register_admin below), and those are approved at once.
+AdminCreator = Annotated[User, Depends(require_role("admin"))]
 
 
-def build_user(payload: Any, role: str, picture: UploadFile | None) -> User:
+def build_user(
+    payload: Any, role: str, picture: UploadFile | None, approved: bool = False
+) -> User:
     stored = store_upload(picture, "image")
     return User(
         email=str(payload.email).lower(),
@@ -275,7 +279,7 @@ def build_user(payload: Any, role: str, picture: UploadFile | None) -> User:
         image_url=stored["file_url"] if stored else None,
         image_object_key=stored["object_key"] if stored else None,
         is_active=True,
-        is_approved=role in SELF_APPROVING_ROLES,
+        is_approved=approved,
     )
 
 
@@ -407,21 +411,19 @@ def register_tutor(
 def register_admin(
     payload: Annotated[AdminRegisterRequest, Form()],
     db: Annotated[Session, Depends(get_db)],
+    creator: AdminCreator,
 ):
-    staff_verification_document = payload.staff_verification_document
-    if settings.storage_enabled and (
-        staff_verification_document is None or not staff_verification_document.filename
-    ):
-        raise HTTPException(
-            status_code=422,
-            detail="Staff verification document is required for admin accounts",
-        )
+    """Create a new admin account. Only a signed-in admin can call this.
 
+    The new admin is approved immediately (the creating admin is vouching
+    for them) and no access token is returned, so the creating admin stays
+    signed in as themselves.
+    """
     ensure_unique_account(db, str(payload.email).lower(), payload.username)
     staff_number = resolve_staff_number(db, payload)
     get_department_or_404(db, payload.department_id)
 
-    user = build_user(payload, "admin", payload.profile_picture)
+    user = build_user(payload, "admin", payload.profile_picture, approved=True)
     db.add(user)
     db.flush()
 
@@ -434,9 +436,22 @@ def register_admin(
         )
     )
     attach_documents(
-        db, user, {"staff_verification_document": staff_verification_document}
+        db,
+        user,
+        {"staff_verification_document": payload.staff_verification_document},
     )
-    return finalize(db, user)
+
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="An account with these details already exists",
+        ) from exc
+
+    logger.info("Admin %s created admin account %s", creator.id, user.id)
+    return AuthPayload(user=serialize_user(load_user(db, user.id)))
 
 
 @router.post(

@@ -23,6 +23,8 @@ import { SubjectsListPage } from "@/pages/subjects/list";
 import { ClassesListPage } from "@/pages/classes/list";
 import { ClassShowPage } from "@/pages/classes/show";
 import { ClassCreatePage } from "@/pages/classes/create";
+import { ApprovalsPage } from "@/pages/admin/approvals";
+import { CreateAdminPage } from "@/pages/admin/create-admin";
 
 function App() {
   return (
@@ -67,6 +69,8 @@ function App() {
           <Route path="/classes" element={<ClassesListPage />} />
           <Route path="/classes/create" element={<ClassCreatePage />} />
           <Route path="/classes/:id" element={<ClassShowPage />} />
+          <Route path="/admin/approvals" element={<ApprovalsPage />} />
+          <Route path="/admin/create-admin" element={<CreateAdminPage />} />
         </Route>
 
         {/* Public auth routes — bounce already-logged-in users into the app */}

@@ -20,9 +20,10 @@ class DatabaseInfo(BaseModel):
 
 class StorageInfo(BaseModel):
     configured: bool
-    endpoint: str | None = None
-    bucket: str | None = None
-    public_url: str | None = None
+    provider: str = "cloudinary"
+    cloud_name: str | None = None
+    folder: str | None = None
+    delivery_url: str | None = None
 
 
 class ActivityInfo(BaseModel):

@@ -15,6 +15,10 @@ const ROLE_ICONS: Record<Role, React.ComponentType<{ className?: string }>> = {
   technical_services: Wrench,
 };
 
+// Admin accounts can't be self-registered: an existing admin creates them
+// from the admin panel (Create admin), so admin is left off this list.
+const PUBLIC_ROLES = (Object.keys(ROLE_CONFIGS) as Role[]).filter((r) => r !== "admin");
+
 export function RegisterPage() {
   const [role, setRole] = useState<Role | null>(null);
 
@@ -40,7 +44,7 @@ export function RegisterPage() {
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
-          {(Object.keys(ROLE_CONFIGS) as Role[]).map((r) => {
+          {PUBLIC_ROLES.map((r) => {
             const Icon = ROLE_ICONS[r];
             return (
               <button
@@ -62,8 +66,8 @@ export function RegisterPage() {
         </div>
 
         <p className="mt-4 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-center text-xs text-muted-foreground">
-          A default Admin account is already set up on the system — ask your system administrator
-          for the sign-in details rather than registering a new one here.
+          New accounts are reviewed by an admin before you can sign in. Need an admin account? Ask
+          an existing admin to create one for you.
         </p>
 
         <p className="mt-6 text-center text-sm text-muted-foreground">

@@ -1,12 +1,18 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.common import envelope, paginate
-from app.api.deps import CurrentUser, is_privileged, load_user, user_loader_options
+from app.api.deps import (
+    CurrentUser,
+    is_privileged,
+    load_user,
+    require_role,
+    user_loader_options,
+)
 from app.db.session import get_db
 from app.models import Department, Programme, StaffProfile, StudentProfile, User
 from app.schemas.common import SingleResponse
@@ -15,6 +21,9 @@ from app.schemas.user import UserUpdate
 from app.services.serializers import serialize_user, serialize_user_summary
 
 router = APIRouter()
+
+# Only admins may approve/reject registrations or hand out the admin role.
+AdminOnly = Annotated[User, Depends(require_role("admin"))]
 
 SELF_EDITABLE = {
     "full_name",
@@ -113,6 +122,17 @@ def list_users(
     return envelope(data, pagination)
 
 
+@router.get("/pending-count")
+def pending_count(
+    db: Annotated[Session, Depends(get_db)],
+    _admin: AdminOnly,
+):
+    total = db.scalar(
+        select(func.count()).select_from(User).where(User.is_approved.is_(False))
+    )
+    return SingleResponse(data={"pending": int(total or 0)})
+
+
 @router.get("/me")
 def get_me(current_user: CurrentUser):
     return SingleResponse(data=serialize_user(current_user))
@@ -178,6 +198,12 @@ def update_user(
             setattr(row, column, data[key])
 
     if privileged and "role" in data:
+        if (
+            to_db_role(data["role"]) == "admin" or row.role == "admin"
+        ) and current_user.role != "admin":
+            raise HTTPException(
+                status_code=403, detail="Only an admin can grant or remove the admin role"
+            )
         row.role = to_db_role(data["role"])
 
     if privileged:
@@ -238,6 +264,55 @@ def delete_user(
         db.commit()
     except IntegrityError:
         db.rollback()
+        row.is_active = False
+        db.commit()
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{user_id}/approve")
+def approve_user(
+    user_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _admin: AdminOnly,
+):
+    row = load_user(db, user_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    row.is_approved = True
+    row.is_active = True
+    db.commit()
+    return SingleResponse(data=serialize_user(load_user(db, row.id)))
+
+
+@router.post("/{user_id}/reject", status_code=status.HTTP_204_NO_CONTENT)
+def reject_user(
+    user_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: AdminOnly,
+):
+    """Turn down a pending registration. The account is removed so the person
+    can register again with the same email/username if it was a mistake."""
+    row = db.get(User, user_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    if row.id == current_user.id:
+        raise HTTPException(status_code=409, detail="You cannot reject your own account")
+    if row.is_approved:
+        raise HTTPException(
+            status_code=409,
+            detail="This account is already approved. Deactivate it instead.",
+        )
+
+    # Plain SQL delete so the database's ON DELETE CASCADE removes the
+    # profile, uploaded document records and reset tokens along with it.
+    try:
+        db.execute(delete(User).where(User.id == user_id))
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        row = db.get(User, user_id)
         row.is_active = False
         db.commit()
 

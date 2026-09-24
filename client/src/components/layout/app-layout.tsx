@@ -7,10 +7,13 @@ import {
   LayoutDashboard,
   LogOut,
   School,
+  ShieldPlus,
+  UserCheck,
 } from "lucide-react";
 
 import { AssistantWidget } from "@/components/assistant";
 import { Button } from "@/components/ui/button";
+import { usePendingApprovals } from "@/hooks/use-pending-approvals";
 import { roleHome } from "@/providers/auth";
 import { cn } from "@/lib/utils";
 import { ROLE_LABELS, type User } from "@/types";
@@ -25,10 +28,24 @@ export function AppLayout({ children }: PropsWithChildren) {
   const { data: identity } = useGetIdentity<User>();
   const { mutate: logout } = useLogout();
 
+  const isAdmin = identity?.role === "admin";
+  const pendingCount = usePendingApprovals(isAdmin);
+
   const dashboardTo = identity ? roleHome(identity.role) : "/";
-  const navItems = [
+  const navItems: {
+    to: string;
+    label: string;
+    icon: typeof LayoutDashboard;
+    badge?: number | null;
+  }[] = [
     { to: dashboardTo, label: "Dashboard", icon: LayoutDashboard },
     ...BASE_NAV_ITEMS,
+    ...(isAdmin
+      ? [
+          { to: "/admin/approvals", label: "Approvals", icon: UserCheck, badge: pendingCount },
+          { to: "/admin/create-admin", label: "Create admin", icon: ShieldPlus },
+        ]
+      : []),
   ];
 
   return (
@@ -40,7 +57,7 @@ export function AppLayout({ children }: PropsWithChildren) {
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
-          {navItems.map(({ to, label, icon: Icon }) => (
+          {navItems.map(({ to, label, icon: Icon, badge }) => (
             <NavLink
               key={to}
               to={to}
@@ -55,6 +72,11 @@ export function AppLayout({ children }: PropsWithChildren) {
             >
               <Icon className="size-4" />
               {label}
+              {badge ? (
+                <span className="ml-auto rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white">
+                  {badge}
+                </span>
+              ) : null}
             </NavLink>
           ))}
         </nav>

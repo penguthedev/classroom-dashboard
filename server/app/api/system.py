@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import AdminUser
 from app.core.config import settings
-from app.core.storage import get_client
+from app.core.storage import ping
 from app.db.session import engine, get_db
 from app.models import Document, Notification, Schedule, User
 from app.schemas.common import SingleResponse
@@ -77,11 +77,12 @@ def check_database(db: Session) -> tuple[ComponentStatus, DatabaseInfo]:
 
 
 def check_storage() -> tuple[ComponentStatus, StorageInfo]:
+    cloud_name = settings.CLOUDINARY_CLOUD_NAME or None
     info = StorageInfo(
         configured=settings.storage_enabled,
-        endpoint=settings.S3_ENDPOINT or None,
-        bucket=settings.S3_BUCKET or None,
-        public_url=settings.S3_PUBLIC_URL or None,
+        cloud_name=cloud_name,
+        folder=settings.CLOUDINARY_FOLDER or None,
+        delivery_url=f"https://res.cloudinary.com/{cloud_name}" if cloud_name else None,
     )
 
     if not settings.storage_enabled:
@@ -89,30 +90,31 @@ def check_storage() -> tuple[ComponentStatus, StorageInfo]:
             ComponentStatus(
                 name="storage",
                 status="disabled",
-                detail="No S3 endpoint or bucket configured",
+                detail="No Cloudinary credentials configured",
             ),
             info,
         )
 
     started = time.perf_counter()
     try:
-        get_client().head_bucket(Bucket=settings.S3_BUCKET)
+        ping()
         latency = (time.perf_counter() - started) * 1000
         return (
             ComponentStatus(
                 name="storage",
                 status="ok",
-                detail=f"Bucket {settings.S3_BUCKET} reachable",
+                detail=f"Cloudinary cloud {settings.CLOUDINARY_CLOUD_NAME} reachable",
                 latency_ms=round(latency, 2),
             ),
             info,
         )
     except Exception as exc:
+        cause = exc.__cause__ or exc
         return (
             ComponentStatus(
                 name="storage",
                 status="down",
-                detail=exc.__class__.__name__,
+                detail=cause.__class__.__name__,
             ),
             info,
         )

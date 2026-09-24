@@ -93,7 +93,8 @@ template with **empty** values.
 | `ASSISTANT_HISTORY_LIMIT` | `12` | Prior messages sent as context |
 | `LOGIN_MAX_ATTEMPTS` | `5` | Failed logins before lockout |
 | `LOGIN_LOCKOUT_SECONDS` | `50` | Lockout duration |
-| `S3_*` | empty | Optional object storage for document uploads |
+| `CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` | empty | Cloudinary credentials for banners, profile pictures and documents |
+| `CLOUDINARY_FOLDER` | empty | Optional folder prefix for every uploaded asset |
 
 Without `GEMINI_API_KEY` the dashboard works normally and the assistant panel shows a
 "not configured" notice instead of failing.

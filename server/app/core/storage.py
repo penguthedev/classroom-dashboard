@@ -1,13 +1,14 @@
 import mimetypes
+import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from functools import lru_cache
 from typing import IO, Any
 from uuid import uuid4
 
-import boto3
-from botocore.client import Config
-from botocore.exceptions import BotoCoreError, ClientError
+import cloudinary
+import cloudinary.api
+import cloudinary.uploader
+import cloudinary.utils
 
 from app.core.config import settings
 
@@ -35,6 +36,10 @@ PREFIXES: dict[str, str] = {
     "banner": "banners",
 }
 
+IMAGE_FORMATS = "jpg,png,webp"
+
+CLOUDINARY_SIGNATURE_TTL_SECONDS = 3600
+
 
 class StorageError(RuntimeError):
     pass
@@ -61,17 +66,36 @@ class PresignedUpload:
     expires_in: int
 
 
-@lru_cache
-def get_client():
+_configured = False
+
+
+def configure() -> None:
+    global _configured
     if not settings.storage_enabled:
-        raise StorageNotConfigured("Object storage is not configured")
-    return boto3.client(
-        "s3",
-        endpoint_url=settings.S3_ENDPOINT,
-        aws_access_key_id=settings.S3_ACCESS_KEY,
-        aws_secret_access_key=settings.S3_SECRET_KEY,
-        config=Config(signature_version="s3v4"),
-    )
+        raise StorageNotConfigured("Cloudinary is not configured")
+    if not _configured:
+        cloudinary.config(
+            cloud_name=settings.CLOUDINARY_CLOUD_NAME,
+            api_key=settings.CLOUDINARY_API_KEY,
+            api_secret=settings.CLOUDINARY_API_SECRET,
+            secure=True,
+        )
+        _configured = True
+
+
+def is_image_kind(kind: str) -> bool:
+    return kind in ("image", "banner")
+
+
+def resource_type_for(kind: str) -> str:
+    return "image" if is_image_kind(kind) else "raw"
+
+
+def resource_type_for_key(object_key: str) -> str:
+    lowered = object_key.lower()
+    if any(lowered.endswith(ext) for ext in DOCUMENT_CONTENT_TYPES.values()):
+        return "raw"
+    return "image"
 
 
 def extension_for(content_type: str, filename: str | None) -> str:
@@ -86,12 +110,28 @@ def extension_for(content_type: str, filename: str | None) -> str:
 def build_object_key(kind: str, content_type: str, filename: str | None) -> str:
     prefix = PREFIXES.get(kind, "uploads")
     stamp = datetime.now(UTC).strftime("%Y/%m")
-    return f"{prefix}/{stamp}/{uuid4().hex}{extension_for(content_type, filename)}"
+    key = f"{prefix}/{stamp}/{uuid4().hex}"
+    folder = settings.CLOUDINARY_FOLDER.strip("/")
+    if folder:
+        key = f"{folder}/{key}"
+    if resource_type_for(kind) == "raw":
+        key += extension_for(content_type, filename)
+    return key
 
 
-def public_url_for(object_key: str) -> str:
-    base = settings.S3_PUBLIC_URL or f"{settings.S3_ENDPOINT}/{settings.S3_BUCKET}"
-    return f"{base.rstrip('/')}/{object_key}"
+def public_url_for(object_key: str, resource_type: str | None = None) -> str:
+    configure()
+    resource_type = resource_type or resource_type_for_key(object_key)
+    options: dict[str, Any] = {
+        "resource_type": resource_type,
+        "type": "upload",
+        "secure": True,
+    }
+    if resource_type == "image":
+        options["fetch_format"] = "auto"
+        options["quality"] = "auto"
+    url, _ = cloudinary.utils.cloudinary_url(object_key, **options)
+    return url
 
 
 def assert_allowed(content_type: str, allowed: dict[str, str]) -> None:
@@ -106,29 +146,35 @@ def upload_fileobj(
     filename: str | None = None,
     size_bytes: int | None = None,
 ) -> StoredObject:
-    allowed = IMAGE_CONTENT_TYPES if kind in ("image", "banner") else DOCUMENT_CONTENT_TYPES
+    allowed = IMAGE_CONTENT_TYPES if is_image_kind(kind) else DOCUMENT_CONTENT_TYPES
     assert_allowed(content_type, allowed)
 
     if size_bytes is not None and size_bytes > settings.UPLOAD_MAX_BYTES:
         raise StorageError("File exceeds the maximum allowed size")
 
+    configure()
     object_key = build_object_key(kind, content_type, filename)
-    client = get_client()
+    resource_type = resource_type_for(kind)
+
+    options: dict[str, Any] = {
+        "public_id": object_key,
+        "resource_type": resource_type,
+        "overwrite": False,
+    }
+    if resource_type == "image":
+        options["allowed_formats"] = IMAGE_FORMATS.split(",")
+
     try:
-        client.upload_fileobj(
-            fileobj,
-            settings.S3_BUCKET,
-            object_key,
-            ExtraArgs={"ContentType": content_type, "ACL": "public-read"},
-        )
-    except (BotoCoreError, ClientError) as exc:
+        result = cloudinary.uploader.upload(fileobj, **options)
+    except Exception as exc:
         raise StorageError("Could not upload the file to storage") from exc
 
+    stored_key = result.get("public_id", object_key)
     return StoredObject(
-        object_key=object_key,
-        file_url=public_url_for(object_key),
+        object_key=stored_key,
+        file_url=public_url_for(stored_key, resource_type),
         content_type=content_type,
-        size_bytes=size_bytes,
+        size_bytes=result.get("bytes", size_bytes),
     )
 
 
@@ -138,34 +184,45 @@ def create_presigned_upload(
     filename: str | None = None,
     max_bytes: int | None = None,
 ) -> PresignedUpload:
-    allowed = IMAGE_CONTENT_TYPES if kind in ("image", "banner") else DOCUMENT_CONTENT_TYPES
+    allowed = IMAGE_CONTENT_TYPES if is_image_kind(kind) else DOCUMENT_CONTENT_TYPES
     assert_allowed(content_type, allowed)
 
-    limit = max_bytes or settings.UPLOAD_MAX_BYTES
+    configure()
     object_key = build_object_key(kind, content_type, filename)
-    client = get_client()
+    resource_type = resource_type_for(kind)
+
+    params: dict[str, Any] = {
+        "public_id": object_key,
+        "overwrite": "false",
+        "timestamp": int(time.time()),
+    }
+    if resource_type == "image":
+        params["allowed_formats"] = IMAGE_FORMATS
 
     try:
-        presigned = client.generate_presigned_post(
-            Bucket=settings.S3_BUCKET,
-            Key=object_key,
-            Fields={"Content-Type": content_type, "acl": "public-read"},
-            Conditions=[
-                {"Content-Type": content_type},
-                {"acl": "public-read"},
-                ["content-length-range", 1, limit],
-            ],
-            ExpiresIn=settings.UPLOAD_URL_EXPIRY_SECONDS,
+        signature = cloudinary.utils.api_sign_request(
+            params, settings.CLOUDINARY_API_SECRET
         )
-    except (BotoCoreError, ClientError) as exc:
+        upload_url = cloudinary.utils.cloudinary_api_url(
+            "upload", resource_type=resource_type
+        )
+    except Exception as exc:
         raise StorageError("Could not create an upload URL") from exc
 
+    fields: dict[str, Any] = {
+        **params,
+        "api_key": settings.CLOUDINARY_API_KEY,
+        "signature": signature,
+    }
+
     return PresignedUpload(
-        upload_url=presigned["url"],
+        upload_url=upload_url,
         object_key=object_key,
-        file_url=public_url_for(object_key),
-        fields=presigned["fields"],
-        expires_in=settings.UPLOAD_URL_EXPIRY_SECONDS,
+        file_url=public_url_for(object_key, resource_type),
+        fields=fields,
+        expires_in=min(
+            settings.UPLOAD_URL_EXPIRY_SECONDS, CLOUDINARY_SIGNATURE_TTL_SECONDS
+        ),
     )
 
 
@@ -173,6 +230,19 @@ def delete_object(object_key: str) -> None:
     if not settings.storage_enabled or not object_key:
         return
     try:
-        get_client().delete_object(Bucket=settings.S3_BUCKET, Key=object_key)
-    except (BotoCoreError, ClientError):
+        configure()
+        cloudinary.uploader.destroy(
+            object_key,
+            resource_type=resource_type_for_key(object_key),
+            invalidate=True,
+        )
+    except Exception:
         return
+
+
+def ping() -> None:
+    configure()
+    try:
+        cloudinary.api.ping()
+    except Exception as exc:
+        raise StorageError("Cloudinary is unreachable") from exc

@@ -1,16 +1,16 @@
 # Deployment
 
-Backend on Render, frontend on Netlify, object storage on any S3-compatible host.
+Backend on Render, frontend on Netlify, file storage on Cloudinary.
 
-Do this in the order below. CORS is circular between the three services, so a
+Do this in the order below. CORS is circular between Render and Netlify, so a
 different order means redeploying twice.
 
 ## 0. Before you start
 
 - A Neon Postgres project, using the **pooled** connection string. The host
   contains `-pooler`. The direct string exhausts connections on Render's free tier.
-- A bucket that is reachable over public HTTPS. `localhost:9000` is not reachable
-  from a deployed Netlify build.
+- A Cloudinary account. Copy the cloud name, API key and API secret from the
+  Cloudinary console dashboard.
 
 ## 1. Run migrations from your machine
 
@@ -28,7 +28,7 @@ DATABASE_URL='<neon pooled url>' python -m app.db.seed
 reads the build command, start command, health check and the env var list.
 
 Values marked `sync: false` are prompted for on first deploy:
-`DATABASE_URL`, `FRONTEND_URL`, the five `S3_*` keys, the `SMTP_*` keys,
+`DATABASE_URL`, `FRONTEND_URL`, the three `CLOUDINARY_*` credential keys, the `SMTP_*` keys,
 `GEMINI_API_KEY`, `GEMINI_MODEL`, `ASSISTANT_INSTITUTION`.
 
 The `SMTP_*` keys can stay empty. Password reset then still works, but the
@@ -63,26 +63,23 @@ Set `FRONTEND_URL` to the Netlify URL and **redeploy**. This is what
 `settings.cors_origins` reads. It accepts a comma-separated list if you need to
 allow more than one origin.
 
-## 5. The third CORS config
+## 5. Cloudinary
 
-This one is on the bucket, and it is separate from both of the above. Edit
-`server/deploy/bucket-cors.json`, replace the placeholder origin with your
-Netlify URL, then apply it:
+There is no bucket CORS or bucket policy to configure. Cloudinary accepts
+browser uploads from any origin and serves every `upload` asset publicly.
 
-```bash
-mc cors set <alias>/<bucket> server/deploy/bucket-cors.json
-```
+`/api/uploads/presign` returns a signed Cloudinary upload: `upload_url` is
+`https://api.cloudinary.com/v1_1/<cloud>/<image|raw>/upload` and `fields` holds
+`api_key`, `timestamp`, `public_id`, `signature` and friends. The browser POSTs
+those fields plus the file straight to Cloudinary, so the API secret never
+leaves Render and no upload preset is needed.
 
-`POST` is in the method list because `/api/uploads/presign` returns a presigned
-POST policy, not a PUT. If you only allow `PUT`, the browser blocks the upload
-and the console names CORS rather than the bucket.
+Signatures expire one hour after they are issued.
 
-The bucket also needs anonymous read, or every banner renders broken while the
-upload itself reports success:
-
-```bash
-mc anonymous set download <alias>/<bucket>
-```
+Images are stored as `image` assets and delivered with `f_auto,q_auto`.
+Documents are stored as `raw` assets. If PDF links return 401, enable
+**Settings > Security > Allow delivery of PDF and ZIP files** in the Cloudinary
+console.
 
 ## 6. Verify
 
@@ -90,7 +87,7 @@ mc anonymous set download <alias>/<bucket>
 - `GET https://<render>/api/system/status` as an admin reports every component `ok`
 - `GET https://<render>/docs` loads
 - The Netlify URL loads data, and a hard refresh on a nested route does not 404
-- Creating a class with a banner writes an object to the bucket and the image renders
+- Creating a class with a banner creates an asset in Cloudinary and the image renders
 
 ## Known free-tier behaviour
 
